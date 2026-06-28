@@ -166,7 +166,7 @@
     .then(function(r){ if(!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
     .then(function(rel){
       var a = rel.assets || [];
-      var mac = findAsset(a, /arm64\.pkg$/i);
+      var mac = findAsset(a, /arm64\.dmg$/i) || findAsset(a, /arm64\.pkg$/i);
       var win = findAsset(a, /Setup\.exe$/i);
       var app = findAsset(a, /\.AppImage$/i);
       var rpm = findAsset(a, /\.rpm$/i);
