@@ -101,6 +101,9 @@
       <p class="primary-os" id="primaryLabel">Recommended for your computer</p>
       <a class="btn" id="primaryBtn" href="#"><span class="ico" id="primaryIco"></span>
         <span class="lbl" id="primaryLbl"></span><span class="sz" id="primarySz"></span></a>
+      <p class="note" id="macHint" style="display:none;margin:.5rem 0 0">
+        Two Mac builds: <b>Apple&nbsp;Silicon</b> for M1/M2/M3 (2020 or newer) or <b>Intel</b> for older
+        Macs. Not sure? Apple&nbsp;menu → <b>About&nbsp;This&nbsp;Mac</b> (it says "Apple&nbsp;M…" or "Intel").</p>
 
       <div class="others">
         <h2>All downloads</h2>
@@ -166,21 +169,34 @@
     .then(function(r){ if(!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
     .then(function(rel){
       var a = rel.assets || [];
-      var mac = findAsset(a, /arm64\.dmg$/i) || findAsset(a, /arm64\.pkg$/i);
+      // Two Mac arches (arm64 + x64) ship as separate DMGs since the dual-arch build. .pkg kept as a
+      // legacy fallback for old releases. An arm64 app WON'T launch on Intel (not even via Rosetta), so
+      // we must surface the Intel build separately — never auto-hand an Intel visitor the arm64 one.
+      var macArm = findAsset(a, /arm64\.dmg$/i) || findAsset(a, /arm64\.pkg$/i);
+      var macX64 = findAsset(a, /x64\.dmg$/i)   || findAsset(a, /x64\.pkg$/i);
       var win = findAsset(a, /Setup\.exe$/i);
       var app = findAsset(a, /\.AppImage$/i);
       var rpm = findAsset(a, /\.rpm$/i);
 
       var PLAT = {
-        mac:   mac && { os:"mac",   name:"Download for Mac",     sub:"macOS · Apple Silicon (M1 or newer)", asset:mac },
-        win:   win && { os:"win",   name:"Download for Windows", sub:"Windows 10 & 11 (64-bit)",           asset:win },
-        linux: app && { os:"linux", name:"Download for Linux",   sub:"AppImage · most distributions",       asset:app }
+        macArm:   macArm && { os:"mac",   name:"Download for Mac",     sub:"macOS · Apple Silicon (M1 or newer)", asset:macArm },
+        macIntel: macX64 && { os:"mac",   name:"Download for Mac",     sub:"macOS · Intel (2020 or earlier)",     asset:macX64 },
+        win:      win    && { os:"win",   name:"Download for Windows", sub:"Windows 10 & 11 (64-bit)",            asset:win },
+        linux:    app    && { os:"linux", name:"Download for Linux",   sub:"AppImage · most distributions",        asset:app }
       };
 
-      var order = ["mac","win","linux"];
-      var primaryKey = detectOS();
+      // Both Mac arches sit together at the front. (macIntel is absent on arm64-only releases → it just
+      // doesn't render, so this stays correct for older releases too.)
+      var order = ["macArm","macIntel","win","linux"];
+      // Browsers can't reliably tell Apple Silicon from Intel — navigator.platform is "MacIntel" on BOTH,
+      // and userAgentData.platform is just "macOS". So for a Mac visitor we default the big button to
+      // Apple Silicon (the common case) and show the Intel build + a "which Mac?" hint right below,
+      // rather than risk auto-picking a build that won't launch.
+      var os = detectOS();
+      var primaryKey = os === "mac" ? (PLAT.macArm ? "macArm" : "macIntel") : os;
       if (!PLAT[primaryKey]) { primaryKey = order.filter(function(k){return PLAT[k];})[0]; }
       if (!primaryKey) { showError(); return; }
+      if (os === "mac" && (PLAT.macArm || PLAT.macIntel)) { $("macHint").style.display = "block"; }
 
       var p = PLAT[primaryKey];
       $("primaryBtn").href = p.asset.browser_download_url;
